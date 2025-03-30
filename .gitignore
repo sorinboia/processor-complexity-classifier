@@ -1,0 +1,6 @@
+docs
+.aider*
+.env
+int
+f5-ai-gateway-sdk-py
+*.pyc
