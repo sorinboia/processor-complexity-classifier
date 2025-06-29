@@ -10,6 +10,7 @@ The results of the classification are added as tags to the request, which can th
 
 1.  **Input Processing:** Receives the request object containing the prompt messages.
 2.  **Text Extraction:** Filters out messages with the `SYSTEM` role and concatenates the content of the remaining messages.
+    - **Configurable History Window:** By default, only the last 2 non-system messages are used for classification. This can be changed by setting the `COMPLEXITY_HISTORY_LEN` environment variable (see below).
 3.  **Tokenization:** Uses the tokenizer associated with the `nvidia/prompt-task-and-complexity-classifier` model to prepare the text for the model.
 4.  **Model Inference:** Feeds the tokenized input into a custom model (`CustomModel`) which includes:
     *   A `microsoft/DeBERTa-v3-base` backbone.
@@ -27,6 +28,7 @@ The results of the classification are added as tags to the request, which can th
     *   `Domain Knowledge`: The domain knowledge score.
     *   `Constraints`: The constraints score.
     *   `# of Few Shots`: The score related to the number of few-shot examples detected (often 0 if none are present).
+    *   `History Length`: The number of non-system messages actually used for classification in this request.
 
 ## Model Used
 
@@ -42,6 +44,25 @@ The results of the classification are added as tags to the request, which can th
 *   `huggingface_hub`
 *   `starlette` (for running the processor service)
 *   An ASGI server (e.g., `uvicorn`)
+
+## Configuring the Chat History Window
+
+By default, the classifier uses only the last 2 non-system messages from the chat history for its analysis.
+You can override this by setting the `COMPLEXITY_HISTORY_LEN` environment variable when running the processor, for example:
+
+```bash
+# Use the last 5 non-system messages for classification
+export COMPLEXITY_HISTORY_LEN=5
+python -m uvicorn complexity-classifier:app --host 127.0.0.1 --port 9999
+```
+
+If running in Docker, you can override the default in your `docker run` command:
+
+```bash
+docker run -e COMPLEXITY_HISTORY_LEN=4 -p 9999:9999 your-image-name
+```
+
+The actual number of messages used for each request is included in both the JSON result and as a tag (`History Length`).
 
 ## Running the Processor
 

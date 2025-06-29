@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import logging
+import os
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -221,6 +222,10 @@ class ComplexityClassifierProcessor(Processor[RequestInput, ResponseOutput, Comp
         )
         logger.info("Initializing ComplexityClassifierProcessor")
 
+        # Get history length from env or default to 2
+        self.history_len = int(os.getenv("COMPLEXITY_HISTORY_LEN", "2"))
+        logger.info(f"Using last {self.history_len} non-system messages for classification")
+
         try:
             model_name = "nvidia/prompt-task-and-complexity-classifier"
             logger.info("Loading custom model configuration")
@@ -283,14 +288,18 @@ class ComplexityClassifierProcessor(Processor[RequestInput, ResponseOutput, Comp
                 modified=False,
             )
 
-        combined_text = " ".join(texts)
+        # Use only the last N non-system messages, where N = self.history_len
+        texts = texts[-self.history_len:]
+        used_history_len = len(texts)
+
+        combined_text = "Prompt: " + " ".join(texts)
         logger.info("Running complexity classifier on prompt text of length %d", len(combined_text))
 
         try:
             logger.debug(combined_text)
             logger.info("Tokenizing and classifying prompt...")
             inputs = self.tokenizer(
-                texts,
+                [combined_text],  # single combined prompt with prefix
                 return_tensors="pt",
                 truncation=True,
                 max_length=512,
@@ -317,20 +326,22 @@ class ComplexityClassifierProcessor(Processor[RequestInput, ResponseOutput, Comp
             "Contextual Knowledge": classification_results.get("contextual_knowledge", [0.0])[0],
             "Domain Knowledge": classification_results.get("domain_knowledge", [0.0])[0],
             "Constraints": classification_results.get("constraint_ct", [0.0])[0],
-            "# of Few Shots": classification_results.get("number_of_few_shots", [0])[0]
+            "# of Few Shots": classification_results.get("number_of_few_shots", [0])[0],
+            "History Length": used_history_len
         }
 
         processor_result["classification"] = result_obj
 
         keys_to_tag = [
             "Task",
-            "Complexity", 
+            "Complexity",
             "Creativity",
             "Reasoning",
             "Contextual Knowledge",
             "Domain Knowledge",
             "Constraints",
-            "# of Few Shots"
+            "# of Few Shots",
+            "History Length"
         ]
 
         logger.debug(result_obj)
